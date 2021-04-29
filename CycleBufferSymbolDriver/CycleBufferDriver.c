@@ -3,6 +3,7 @@
 #include <linux/init.h> /* Определения макросов */
 #include <linux/fs.h>
 #include <asm/uaccess.h> /* put_user */
+#include <linux/ioctl.h>
 //#include <linux/ioctl.h>
 //#include <sys/ioctl.h>  /* ioctl */
 
@@ -30,6 +31,7 @@ static ssize_t device_write( struct file *, const char *, size_t, loff_t * );
 
 static ssize_t frame_read( struct file *, int *, int *, char *[], int * );
 static ssize_t frame_write( struct file *, int , int , char [], int );
+static int frame_ioctl( struct file *, unsigned int, unsigned int, char *[]);
 
 // Глобальные переменные, объявлены как static, воизбежание конфликтов имен.
 static int major_number; /* Старший номер устройства нашего драйвера */
@@ -37,8 +39,11 @@ static int is_device_open = 0; /* Используется ли девайс ? *
 //static char text[ 5 ] = "test\n"; /* Текст, который мы будет отдавать при обращении к нашему устройству */
 //static char* text_ptr = text; /* Указатель на текущую позицию в тексте */
 
+
 //Создадим кольцевой буфер для фреймов
 struct Frame cycleFrameBuf[SIZE_BUF];
+
+
 unsigned char frame_tail = 0;      //"указатель" хвоста буфера
 unsigned char frame_head = 0;   //"указатель" головы буфера
 unsigned char frame_count = 0;  //счетчик символов
@@ -133,6 +138,8 @@ static int __init test_init( void )
   printk( "Registering the character device failed with %d\n", major_number );
   return major_number;
  }
+ //Создадим кольцевой буфер для фреймов
+ struct Frame cycleFrameBuf[SIZE_BUF];
 
  // Сообщаем присвоенный нам старший номер устройства
  printk( "Test module is loaded!\n" );
@@ -218,6 +225,12 @@ static ssize_t frame_write(struct file *filp, int transmitted_time, int transmit
 //  return byte_write;
 //}
 
+static ssize_t device_write( struct file *filp, const char *buff, size_t len, loff_t * off )
+{
+ printk("device_write_function\n");
+ return len;
+}
+
 // Эта функция получит ссылки на значения, в которые она запишет данные из фрейма
 static ssize_t frame_read(struct file *filp, int *readed_time, int *readed_pid, char *readed_mes[], int *readed_num_of_el)
 {
@@ -239,9 +252,10 @@ static ssize_t frame_read(struct file *filp, int *readed_time, int *readed_pid, 
 
   return frame_read;
 }
-//static ssize_t device_read( struct file *filp, char *buffer, size_t length, loff_t * offset ){
+
+// static ssize_t device_read( struct file *filp, char *buffer, size_t length, loff_t * offset ){
 //  int byte_read = 0;
-//
+
 //  //if ( *text_ptr == 0 )//text_ptr = text[], тот массив. из которого мы читаем
 //  //  return 0;
 
@@ -254,4 +268,32 @@ static ssize_t frame_read(struct file *filp, int *readed_time, int *readed_pid, 
 //  }
 
 //  return byte_read;
-//}
+// }
+
+static ssize_t device_read( struct file *filp, char *buffer, size_t length, loff_t * offset ){
+  printk("device_read_function\n");
+  return 0;
+}
+
+static int frame_ioctl( struct file *filp, unsigned int cmd, unsigned int arg, char *returnable_message[])
+{
+  struct Frame frame;
+  switch(cmd){
+    case 0://get number of messages
+      return frame_count;
+
+    case 1://get i-oe mesage
+      frame = cycleFrameBuf[arg];
+
+      ssize_t num_of_el = sizeof(frame.message)/sizeof(frame.message[0]);
+
+      ssize_t i;
+      for (i = 0; i < num_of_el; i++){
+      (*returnable_message[i]) = frame.message[i];
+      }
+      return 0;
+
+    default:
+      return -1;
+  }
+}
